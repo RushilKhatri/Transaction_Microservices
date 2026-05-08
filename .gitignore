@@ -1,0 +1,52 @@
+# Secrets and local env files
+.env
+.env.local
+.env.*.local
+!.env.docker
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+coverage/
+.vite/
+
+# Logs and reports
+*.log
+logs/
+reports/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Git metadata and misc generated files
+.git/
+*.swp
+*.swo

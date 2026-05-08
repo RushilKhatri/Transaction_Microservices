@@ -1,0 +1,170 @@
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: banking-postgres
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - banking-net
+
+  # ── Vault (dev mode — replace with prod config in Phase 6) ─────────────────
+  vault:
+    image: hashicorp/vault:1.17
+    container_name: banking-vault
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault status >/dev/null" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - banking-net
+
+  # ── Transaction Service ─────────────────────────────────────────────────────
+  transaction-service:
+    build:
+      context: ./transaction-service
+      dockerfile: Dockerfile
+    container_name: banking-transaction
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      FRAUD_SERVICE_URL: ${FRAUD_SERVICE_URL}
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+      FLASK_DEBUG: "false"
+    ports:
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Fraud Detection Service ─────────────────────────────────────────────────
+  fraud-detection-service:
+    build:
+      context: ./fraud-detection-service
+      dockerfile: Dockerfile
+    container_name: banking-fraud
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      TRANSACTION_SERVICE_URL: ${TRANSACTION_SERVICE_URL}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL}
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+      FLASK_DEBUG: "false"
+    ports:
+      - "5002:5002"
+    depends_on:
+      transaction-service:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5002/health')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Notification Service ────────────────────────────────────────────────────
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: banking-notification
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+      FLASK_DEBUG: "false"
+    ports:
+      - "5003:5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5003/health')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── React Frontend ──────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_TRANSACTION_URL: http://localhost:5001
+        VITE_FRAUD_URL: http://localhost:5002
+        VITE_NOTIFICATION_URL: http://localhost:5003
+    container_name: banking-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      transaction-service:
+        condition: service_healthy
+    networks:
+      - banking-net
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  pgdata:
+    driver: local
+
+# ── Network ───────────────────────────────────────────────────────────────────
+networks:
+  banking-net:
+    driver: bridge
