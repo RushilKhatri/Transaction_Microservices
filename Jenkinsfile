@@ -7,6 +7,10 @@ pipeline {
     disableConcurrentBuilds()
   }
 
+  triggers {
+    githubPush()
+  }
+
   parameters {
     booleanParam(name: 'PUSH_IMAGES', defaultValue: false, description: 'Push built images to Docker Hub')
     booleanParam(name: 'RUN_DEPLOY', defaultValue: false, description: 'Run deployment step after image push')
