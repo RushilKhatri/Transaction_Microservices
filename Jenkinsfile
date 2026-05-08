@@ -3,7 +3,6 @@ pipeline {
 
   options {
     timestamps()
-    ansiColor('xterm')
     disableConcurrentBuilds()
   }
 
@@ -114,11 +113,11 @@ pipeline {
       steps {
         sh '''
           set -e
-          docker compose down -v || true
+          docker compose --env-file .env.docker down -v || true
 
-          docker compose up -d vault postgres
+          docker compose --env-file .env.docker up -d vault postgres
           bash infra/vault/seed-dev.sh
-          docker compose up -d transaction-service fraud-detection-service notification-service frontend
+          docker compose --env-file .env.docker up -d transaction-service fraud-detection-service notification-service frontend
 
           # wait for health
           timeout 120 sh -c 'until [ "$(docker inspect --format="{{.State.Health.Status}}" banking-transaction 2>/dev/null)" = "healthy" ]; do sleep 2; done'
@@ -204,7 +203,7 @@ pipeline {
     always {
       junit testResults: 'reports/*.xml', allowEmptyResults: true
       archiveArtifacts artifacts: 'reports/*', allowEmptyArchive: true
-      sh 'docker compose down -v || true'
+      sh 'docker compose --env-file .env.docker down -v || true'
     }
   }
 }
