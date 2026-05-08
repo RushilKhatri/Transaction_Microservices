@@ -22,7 +22,7 @@ api = Blueprint("api", __name__)
 
 # ── Dev-only admin credentials (not a real auth system) ───────────────────────
 _ADMIN_USER = "admin"
-_ADMIN_PASS = "admin123"
+_ADMIN_PASS = "admin123"  # nosec B105 - intentional local-dev credential for pipeline smoke tests
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
