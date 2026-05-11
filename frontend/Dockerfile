@@ -4,7 +4,7 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --silent
+RUN npm ci --include=dev --silent
 
 COPY . .
 # Inject build-time env vars so Vite bakes service URLs into the bundle

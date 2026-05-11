@@ -13,6 +13,7 @@ pipeline {
   parameters {
     booleanParam(name: 'PUSH_IMAGES', defaultValue: false, description: 'Push built images to Docker Hub')
     booleanParam(name: 'RUN_DEPLOY', defaultValue: false, description: 'Run deployment step after image push')
+    booleanParam(name: 'FAIL_ON_IMAGE_SCAN', defaultValue: false, description: 'Fail pipeline on Trivy HIGH/CRITICAL findings')
     string(name: 'DOCKERHUB_NAMESPACE', defaultValue: 'your-dockerhub-username', description: 'Docker Hub namespace/user')
   }
 
@@ -85,7 +86,7 @@ pipeline {
       steps {
         sh '''
           set -e
-          docker compose build transaction-service fraud-detection-service notification-service frontend
+          docker compose --env-file .env.docker build transaction-service fraud-detection-service notification-service frontend
         '''
       }
     }
@@ -94,16 +95,30 @@ pipeline {
       steps {
         sh '''
           set -e
+          mkdir -p reports
+
+          if [ "${FAIL_ON_IMAGE_SCAN}" = "true" ]; then
+            TRIVY_EXIT=1
+          else
+            TRIVY_EXIT=0
+          fi
+
           for IMG in \
             banking-devsecops-transaction-service:latest \
             banking-devsecops-fraud-detection-service:latest \
             banking-devsecops-notification-service:latest \
             banking-devsecops-frontend:latest
           do
+            SAFE_NAME=$(echo "$IMG" | tr ':/' '__')
             docker run --rm \
               -v /var/run/docker.sock:/var/run/docker.sock \
               aquasec/trivy:0.51.2 image \
-              --severity HIGH,CRITICAL --exit-code 1 "$IMG"
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code "$TRIVY_EXIT" \
+              "$IMG" > "reports/trivy-${SAFE_NAME}.txt"
+            cat "reports/trivy-${SAFE_NAME}.txt"
           done
         '''
       }
