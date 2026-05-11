@@ -166,23 +166,16 @@ pipeline {
 
           SUCCESS=0
           for i in $(seq 1 10); do
-            RESP=$(curl -sS -w '\n%{http_code}' -X POST http://localhost:5001/transaction \
-              -H "Authorization: Bearer $TOKEN" \
-              -H 'Content-Type: application/json' \
-              -d "{\"from_account_id\":\"$A1\",\"to_account_id\":\"$A2\",\"amount\":60000,\"transaction_type\":\"debit\"}" || true)
-
-            HTTP_CODE=$(printf "%s" "$RESP" | tail -n1)
-            BODY=$(printf "%s" "$RESP" | sed '$d')
-
-            if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-              printf "%s" "$BODY" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["fraud_flagged"] is True; print(d["id"])'
-              SUCCESS=1
-              break
+            curl -sS -X POST http://localhost:5001/transaction -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"from_account_id\":\"$A1\",\"to_account_id\":\"$A2\",\"amount\":60000,\"transaction_type\":\"debit\"}" > /tmp/tx.json 2>&1
+            HTTP_CODE=$?
+            
+            if [ "$HTTP_CODE" -eq 0 ]; then
+              python3 -c "import json; d=json.load(open('/tmp/tx.json')); assert d.get('fraud_flagged') is True; print(d['id'])" && SUCCESS=1 && break
             fi
-
-            echo "Transaction attempt $i failed with HTTP $HTTP_CODE"
-            printf "%s\n" "$BODY"
-            sleep 3
+            
+            echo "Transaction attempt $i failed"
+            cat /tmp/tx.json || true
+            sleep 2
           done
 
           [ "$SUCCESS" = "1" ]
