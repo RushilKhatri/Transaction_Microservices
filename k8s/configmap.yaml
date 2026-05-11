@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: banking-config
+data:
+  POSTGRES_DB: banking
+  POSTGRES_USER: banking_user
+  POSTGRES_PORT: "5432"
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  FRAUD_SERVICE_URL: http://fraud-detection-service:5002
+  TRANSACTION_SERVICE_URL: http://transaction-service:5001
+  NOTIFICATION_SERVICE_URL: http://notification-service:5003
+  VAULT_ADDR: http://vault:8200
+  TRUSTED_INTERNAL_SERVICES: fraud-detection-service
+  INTERNAL_REQUIRED_SCOPE: internal_history_read
+  INTERNAL_SERVICE_ID: fraud-detection-service
+  INTERNAL_JWT_AUDIENCE: internal-services
+  INTERNAL_JWT_TTL_SECONDS: "120"
+  FLASK_DEBUG: "false"
+  SMTP_HOST: ""
+  SMTP_PORT: "587"
+  ALERT_EMAIL_TO: ""

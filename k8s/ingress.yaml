@@ -1,0 +1,41 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: banking-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: banking.local
+      http:
+        paths:
+          - path: /transaction(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: transaction-service
+                port:
+                  number: 5001
+          - path: /fraud(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: fraud-detection-service
+                port:
+                  number: 5002
+          - path: /notification(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 5003
+          - path: /(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

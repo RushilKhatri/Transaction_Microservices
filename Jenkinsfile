@@ -13,8 +13,11 @@ pipeline {
   parameters {
     booleanParam(name: 'PUSH_IMAGES', defaultValue: false, description: 'Push built images to Docker Hub')
     booleanParam(name: 'RUN_DEPLOY', defaultValue: false, description: 'Run deployment step after image push')
+    booleanParam(name: 'DEPLOY_TO_K8S', defaultValue: false, description: 'Deploy to Kubernetes cluster (requires kubectl + kubeconfig)')
     booleanParam(name: 'FAIL_ON_IMAGE_SCAN', defaultValue: false, description: 'Fail pipeline on Trivy HIGH/CRITICAL findings')
     string(name: 'DOCKERHUB_NAMESPACE', defaultValue: 'your-dockerhub-username', description: 'Docker Hub namespace/user')
+    string(name: 'K8S_NAMESPACE', defaultValue: 'banking', description: 'Kubernetes namespace for deployment')
+    string(name: 'K8S_IMAGE_TAG', defaultValue: 'latest', description: 'Image tag for Kubernetes deployment (e.g., build number or git commit)')
   }
 
   environment {
@@ -182,6 +185,69 @@ EOF
           done
 
           [ "$SUCCESS" = "1" ]
+        '''
+      }
+    }
+
+    stage('Deploy to Kubernetes') {
+      when {
+        expression { return params.DEPLOY_TO_K8S }
+      }
+      steps {
+        sh '''
+          set -e
+          
+          # Check kubectl is available
+          if ! command -v kubectl &> /dev/null; then
+            echo "ERROR: kubectl not found. Please install kubectl and configure kubeconfig."
+            exit 1
+          fi
+          
+          # Verify cluster connection
+          echo "Verifying Kubernetes cluster connection..."
+          kubectl cluster-info
+          
+          # Create namespace if it doesn't exist
+          kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+          
+          # Create a kustomization overlay with the build-specific image tag
+          mkdir -p k8s/overlays/ci-build
+          
+          cat > k8s/overlays/ci-build/kustomization.yaml <<EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ${K8S_NAMESPACE}
+
+bases:
+  - ../../
+
+images:
+  - name: banking-transaction-service
+    newTag: "${K8S_IMAGE_TAG}"
+  - name: banking-fraud-detection-service
+    newTag: "${K8S_IMAGE_TAG}"
+  - name: banking-notification-service
+    newTag: "${K8S_IMAGE_TAG}"
+  - name: banking-frontend
+    newTag: "${K8S_IMAGE_TAG}"
+EOF
+          
+          # Apply manifests
+          echo "Deploying manifests to Kubernetes namespace: ${K8S_NAMESPACE}"
+          kubectl apply -k k8s/overlays/ci-build
+          
+          # Wait for deployments to be ready (max 5 minutes)
+          echo "Waiting for deployments to become ready..."
+          kubectl rollout status deployment/transaction-service -n "${K8S_NAMESPACE}" --timeout=5m
+          kubectl rollout status deployment/fraud-detection-service -n "${K8S_NAMESPACE}" --timeout=5m
+          kubectl rollout status deployment/notification-service -n "${K8S_NAMESPACE}" --timeout=5m
+          kubectl rollout status deployment/frontend -n "${K8S_NAMESPACE}" --timeout=5m
+          
+          echo "Kubernetes deployment successful!"
+          echo ""
+          echo "Deployed resources:"
+          kubectl get all -n "${K8S_NAMESPACE}"
         '''
       }
     }

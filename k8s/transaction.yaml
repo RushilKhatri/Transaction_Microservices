@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-service
+spec:
+  selector:
+    app: transaction-service
+  ports:
+    - name: http
+      port: 5001
+      targetPort: 5001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transaction-service
+  template:
+    metadata:
+      labels:
+        app: transaction-service
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done
+        - name: wait-for-vault
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - until wget -qO- http://vault:8200/v1/sys/health >/dev/null 2>&1; do echo waiting for vault; sleep 2; done
+      containers:
+        - name: transaction-service
+          image: banking-transaction-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5001
+          envFrom:
+            - configMapRef:
+                name: banking-config
+            - secretRef:
+                name: banking-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 20
+            periodSeconds: 10
