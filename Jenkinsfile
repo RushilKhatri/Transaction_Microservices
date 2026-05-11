@@ -166,7 +166,10 @@ pipeline {
 
           SUCCESS=0
           for i in $(seq 1 10); do
-            curl -sS -X POST http://localhost:5001/transaction -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"from_account_id\":\"$A1\",\"to_account_id\":\"$A2\",\"amount\":60000,\"transaction_type\":\"debit\"}" > tx.json 2>&1
+            cat > payload.json <<EOF
+{"from_account_id":"$A1","to_account_id":"$A2","amount":60000,"transaction_type":"debit"}
+EOF
+            curl -sS -X POST http://localhost:5001/transaction -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @payload.json > tx.json 2>&1
             HTTP_CODE=$?
             
             if [ "$HTTP_CODE" -eq 0 ]; then
