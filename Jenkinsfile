@@ -166,15 +166,15 @@ pipeline {
 
           SUCCESS=0
           for i in $(seq 1 10); do
-            curl -sS -X POST http://localhost:5001/transaction -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"from_account_id\":\"$A1\",\"to_account_id\":\"$A2\",\"amount\":60000,\"transaction_type\":\"debit\"}" > /tmp/tx.json 2>&1
+            curl -sS -X POST http://localhost:5001/transaction -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"from_account_id\":\"$A1\",\"to_account_id\":\"$A2\",\"amount\":60000,\"transaction_type\":\"debit\"}" > tx.json 2>&1
             HTTP_CODE=$?
             
             if [ "$HTTP_CODE" -eq 0 ]; then
-              python3 -c "import json; d=json.load(open('/tmp/tx.json')); assert d.get('fraud_flagged') is True; print(d['id'])" && SUCCESS=1 && break
+              python3 -c "import json; d=json.load(open('tx.json')); assert d.get('fraud_flagged') is True; print(d['id'])" && SUCCESS=1 && break
             fi
             
             echo "Transaction attempt $i failed"
-            cat /tmp/tx.json || true
+            cat tx.json || true
             sleep 2
           done
 
