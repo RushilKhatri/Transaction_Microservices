@@ -166,19 +166,22 @@ pipeline {
 
           SUCCESS=0
           for i in $(seq 1 10); do
-            HTTP_CODE=$(curl -sS -o /tmp/tx-response.json -w "%{http_code}" -X POST http://localhost:5001/transaction \
+            RESP=$(curl -sS -w '\n%{http_code}' -X POST http://localhost:5001/transaction \
               -H "Authorization: Bearer $TOKEN" \
               -H 'Content-Type: application/json' \
               -d "{\"from_account_id\":\"$A1\",\"to_account_id\":\"$A2\",\"amount\":60000,\"transaction_type\":\"debit\"}" || true)
 
-            if [ "$HTTP_CODE" = "200" ]; then
-              python3 -c 'import json; d=json.load(open("/tmp/tx-response.json")); assert d["fraud_flagged"] is True; print(d["id"])'
+            HTTP_CODE=$(printf "%s" "$RESP" | tail -n1)
+            BODY=$(printf "%s" "$RESP" | sed '$d')
+
+            if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+              printf "%s" "$BODY" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["fraud_flagged"] is True; print(d["id"])'
               SUCCESS=1
               break
             fi
 
             echo "Transaction attempt $i failed with HTTP $HTTP_CODE"
-            cat /tmp/tx-response.json || true
+            printf "%s\n" "$BODY"
             sleep 3
           done
 
