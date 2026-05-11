@@ -132,10 +132,13 @@ pipeline {
 
           docker compose --env-file .env.docker up -d vault postgres
           bash infra/vault/seed-dev.sh
-          docker compose --env-file .env.docker up -d transaction-service fraud-detection-service notification-service frontend
+          docker compose --env-file .env.docker up -d transaction-service
 
           # wait for health
           timeout 120 sh -c 'until [ "$(docker inspect --format="{{.State.Health.Status}}" banking-transaction 2>/dev/null)" = "healthy" ]; do sleep 2; done'
+
+          docker compose --env-file .env.docker up -d notification-service fraud-detection-service frontend
+
           timeout 120 sh -c 'until [ "$(docker inspect --format="{{.State.Health.Status}}" banking-fraud 2>/dev/null)" = "healthy" ]; do sleep 2; done'
           timeout 120 sh -c 'until [ "$(docker inspect --format="{{.State.Health.Status}}" banking-notification 2>/dev/null)" = "healthy" ]; do sleep 2; done'
 
