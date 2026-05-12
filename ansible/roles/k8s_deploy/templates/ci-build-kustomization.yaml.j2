@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: {{ k8s_namespace }}
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres.yaml
+  - vault.yaml
+  - transaction.yaml
+  - fraud.yaml
+  - notification.yaml
+  - frontend.yaml
+  - ingress.yaml
+  - hpa.yaml
+
+configMapGenerator:
+  - name: postgres-init-sql
+    files:
+      - init.sql=init.sql
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+images:
+  - name: banking-transaction-service
+    newName: rushilkhatri/banking-transaction-service
+    newTag: "{{ k8s_image_tag }}"
+  - name: banking-fraud-detection-service
+    newName: rushilkhatri/banking-fraud-detection-service
+    newTag: "{{ k8s_image_tag }}"
+  - name: banking-notification-service
+    newName: rushilkhatri/banking-notification-service
+    newTag: "{{ k8s_image_tag }}"
+  - name: banking-frontend
+    newName: rushilkhatri/banking-frontend
+    newTag: "{{ k8s_image_tag }}"

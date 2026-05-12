@@ -1,0 +1,5 @@
+project_root: "{{ playbook_dir }}/.."
+k8s_namespace: banking
+k8s_dir: "{{ project_root }}/k8s"
+deployment_timeout: 180
+k8s_image_tag: "latest"

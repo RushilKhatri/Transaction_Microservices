@@ -6,7 +6,7 @@ namespace: banking
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.example.yaml
+  - secret.yaml
   - postgres.yaml
   - vault.yaml
   - transaction.yaml
@@ -14,11 +14,26 @@ resources:
   - notification.yaml
   - frontend.yaml
   - ingress.yaml
+  - hpa.yaml
+
+images:
+  - name: banking-transaction-service
+    newName: rushilkhatri/banking-transaction-service
+    newTag: v1.0.0
+  - name: banking-fraud-detection-service
+    newName: rushilkhatri/banking-fraud-detection-service
+    newTag: v1.0.0
+  - name: banking-notification-service
+    newName: rushilkhatri/banking-notification-service
+    newTag: v1.0.0
+  - name: banking-frontend
+    newName: rushilkhatri/banking-frontend
+    newTag: v1.0.4
 
 configMapGenerator:
   - name: postgres-init-sql
     files:
-      - init.sql=../infra/postgres/init.sql
+      - init.sql=init.sql
 
 generatorOptions:
   disableNameSuffixHash: true

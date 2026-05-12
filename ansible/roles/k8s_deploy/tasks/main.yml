@@ -1,0 +1,92 @@
+---
+- name: Ensure Kubernetes namespace exists
+  ansible.builtin.command:
+    cmd: kubectl create namespace {{ k8s_namespace }} --dry-run=client -o yaml
+  register: namespace_manifest
+  changed_when: false
+
+- name: Apply namespace manifest
+  ansible.builtin.shell: |
+    set -e
+    printf '%s\n' "{{ namespace_manifest.stdout }}" | kubectl apply -f -
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Check whether Metrics Server is installed
+  ansible.builtin.command:
+    cmd: kubectl get deployment metrics-server -n kube-system
+  register: metrics_server_check
+  failed_when: false
+  changed_when: false
+
+- name: Install Metrics Server when missing
+  ansible.builtin.command:
+    cmd: kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+  when: metrics_server_check.rc != 0
+  register: metrics_server_apply
+  changed_when: true
+
+- name: Wait for Metrics Server rollout
+  ansible.builtin.command:
+    cmd: kubectl rollout status deployment/metrics-server -n kube-system --timeout=180s
+  when: metrics_server_check.rc != 0
+  changed_when: false
+
+- name: Render Kubernetes secret from vault variables
+  ansible.builtin.template:
+    src: secret.yaml.j2
+    dest: "{{ k8s_dir }}/overlays/ci-build/secret.yaml"
+    mode: '0600'
+
+- name: Ensure CI build overlay directory exists
+  ansible.builtin.file:
+    path: "{{ k8s_dir }}/overlays/ci-build"
+    state: directory
+
+- name: Copy static Kubernetes manifests into the overlay
+  ansible.builtin.copy:
+    src: "{{ k8s_dir }}/{{ item }}"
+    dest: "{{ k8s_dir }}/overlays/ci-build/{{ item }}"
+    remote_src: true
+    mode: '0644'
+  loop:
+    - namespace.yaml
+    - configmap.yaml
+    - postgres.yaml
+    - vault.yaml
+    - transaction.yaml
+    - fraud.yaml
+    - notification.yaml
+    - frontend.yaml
+    - ingress.yaml
+    - hpa.yaml
+
+- name: Copy init.sql into the overlay
+  ansible.builtin.copy:
+    src: "{{ k8s_dir }}/init.sql"
+    dest: "{{ k8s_dir }}/overlays/ci-build/init.sql"
+    remote_src: true
+    mode: '0644'
+
+- name: Write CI build Kustomize overlay
+  ansible.builtin.template:
+    src: ci-build-kustomization.yaml.j2
+    dest: "{{ k8s_dir }}/overlays/ci-build/kustomization.yaml"
+    mode: '0644'
+
+- name: Apply Kubernetes manifests via Kustomize
+  ansible.builtin.command:
+    cmd: kubectl apply -k {{ k8s_dir }}/overlays/ci-build
+  register: apply_output
+  changed_when: "'configured' in apply_output.stdout or 'created' in apply_output.stdout"
+
+- name: Wait for workloads to become ready
+  ansible.builtin.command:
+    cmd: kubectl rollout status deployment/{{ item }} -n {{ k8s_namespace }} --timeout={{ deployment_timeout }}s
+  loop:
+    - transaction-service
+    - fraud-detection-service
+    - notification-service
+    - frontend
+  changed_when: false

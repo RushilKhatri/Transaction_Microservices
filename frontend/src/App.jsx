@@ -23,7 +23,7 @@ import './App.css';
 // ── Inner App (needs token from context) ─────────────────────────────────────
 
 function Dashboard() {
-    const { token, authError } = useContext(AuthContext);
+    const { token, authError, loading: authLoading } = useContext(AuthContext);
 
     // Load account IDs from the JSON file seeded by seed.py
     const [accountIds, setAccountIds] = useState([]);
@@ -55,19 +55,26 @@ function Dashboard() {
         refetchTransactions();
     };
 
-    if (authError) {
-        return (
-            <div className="auth-error-banner" role="alert">
-                <span>🔴</span>
-                <strong>Cannot reach transaction service</strong> — is it running?
-                <br />
-                <small>{authError}</small>
-            </div>
-        );
-    }
-
     return (
         <>
+            {authLoading && !token && (
+                <div className="auth-error-banner" role="status">
+                    <span>🟡</span>
+                    <strong>Connecting to transaction service</strong>
+                    <br />
+                    <small>Retrying authentication{authError ? ` — ${authError}` : ''}</small>
+                </div>
+            )}
+
+            {authError && !authLoading && !token && (
+                <div className="auth-error-banner" role="alert">
+                    <span>🔴</span>
+                    <strong>Transaction service authentication is retrying</strong>
+                    <br />
+                    <small>{authError}</small>
+                </div>
+            )}
+
             <FraudAlertBanner
                 activeAlerts={activeAlerts}
                 dismissAlert={dismissAlert}

@@ -21,7 +21,7 @@ export const SEEDED_NAMES = [
     'Test Merchant',
 ];
 
-const POLL_MS = 3000;
+const POLL_MS = 15000;
 
 export function useAccounts(accountIds = [], activeAlerts = []) {
     const { token } = useContext(AuthContext);
@@ -30,7 +30,11 @@ export function useAccounts(accountIds = [], activeAlerts = []) {
     const [error, setError] = useState(null);
 
     const fetchAccounts = useCallback(async () => {
-        if (!token || accountIds.length === 0) return;
+        if (!token || accountIds.length === 0) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
         try {
             const data = await getAccounts(token, accountIds);
             // Attach isHighRisk based on activeAlerts
@@ -49,10 +53,15 @@ export function useAccounts(accountIds = [], activeAlerts = []) {
     }, [token, accountIds, activeAlerts]);
 
     useEffect(() => {
+        if (!token || accountIds.length === 0) {
+            setLoading(false);
+            return undefined;
+        }
+
         fetchAccounts();
         const id = setInterval(fetchAccounts, POLL_MS);
         return () => clearInterval(id);
-    }, [fetchAccounts]);
+    }, [fetchAccounts, token, accountIds.length]);
 
     return { accounts, loading, error, refetch: fetchAccounts };
 }

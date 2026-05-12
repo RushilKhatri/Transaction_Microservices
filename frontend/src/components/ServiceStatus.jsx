@@ -12,7 +12,7 @@ const SERVICES = [
     { label: 'Notification', url: NOTIFICATION_URL },
 ];
 
-const POLL_MS = 5000;
+const POLL_MS = 20000;
 
 export default function ServiceStatus() {
     const [statuses, setStatuses] = useState({ Transaction: null, Fraud: null, Notification: null });

@@ -1,6 +1,6 @@
 # Secure Banking Transaction System
 
-A three-microservice banking backend built with Flask, SQLAlchemy, and Flask-JWT-Extended, designed from the ground up for integration with **Docker Compose**, **Kubernetes**, **HashiCorp Vault**, **Jenkins CI/CD**, and the **ELK stack**.
+A three-microservice banking backend built with Flask, SQLAlchemy, and Flask-JWT-Extended, designed from the ground up for integration with **Docker Compose**, **Kubernetes**, **Ansible Vault**, **Jenkins CI/CD**, **Horizontal Pod Autoscaling**, and the **ELK stack**.
 
 ---
 
@@ -169,7 +169,7 @@ A root [Jenkinsfile](Jenkinsfile) is included with these stages:
 6. Image scan (`trivy`, HIGH/CRITICAL gate)
 7. Docker Compose smoke test (Vault seed + health checks + end-to-end transaction)
 8. Optional push to Docker Hub
-9. Optional deploy step (Ansible if playbook exists)
+9. Optional deploy step (Ansible playbook)
 
 ### Jenkins job setup notes
 
@@ -237,11 +237,29 @@ For a complete step-by-step Jenkins installation, job configuration, webhook, an
 | Integration | Status | Notes |
 |---|---|---|
 | **Docker Compose** | Planned | Service names already match defaults (`postgres`, `fraud-detection-service`, etc.) |
-| **Kubernetes** | Planned | DB URI components injectable as K8s Secrets/ConfigMaps |
+| **Kubernetes** | Implemented | See [k8s/README.md](k8s/README.md) for the current base manifests, HPA, and deployment notes |
 | **HashiCorp Vault** | Ready | `get_secret()` already supports Vault via `VAULT_ADDR` env var |
 | **Jenkins CI/CD** | Planned | Tests runnable as `pytest` commands in pipeline stages |
 | **ELK Stack** | Ready | All logs are structured JSON; compatible with Filebeat/Logstash |
-| **Ansible** | Planned | Service startup/deployment playbooks to be added |
+| **Ansible** | Implemented | Kubernetes deployment is executed through `ansible-playbook` and vault-backed variables |
+
+### Project completion checklist
+
+- Kubernetes cluster deployment: manifests, ingress, secret provisioning, and Ansible-driven rollout
+- Frontend cluster build: use ingress-facing API URLs instead of localhost compose URLs
+- Ansible Vault: encrypted deployment variables are now in the repo for secret handling
+- Autoscaling: HPA manifests are included for the app workloads
+- Observability: add logs shipping, metrics, and alerts
+- Hardening: resource limits, PodDisruptionBudgets, network policy, and image tag discipline
+- Release automation: registry push + Ansible deploy stage wired to the cluster
+
+### Submission-ready implementation notes
+
+- Jenkins now calls `ansible-playbook` for Kubernetes rollout instead of applying manifests directly.
+- Ansible renders the Kubernetes secret from vault-encrypted values before applying the Kustomize overlay.
+- HPA objects are included for the runtime services and the frontend, with CPU requests/limits on each workload.
+- The frontend uses same-origin `/api/...` routing, so the browser talks through the Nginx proxy instead of localhost backends.
+- Seeded demo accounts and transaction/auth flows are wired for an end-to-end demo in the cluster.
 
 ---
 

@@ -8,7 +8,7 @@ bases: []
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.example.yaml
+  - secret.yaml
   - postgres.yaml
   - vault.yaml
   - transaction.yaml
@@ -16,6 +16,7 @@ resources:
   - notification.yaml
   - frontend.yaml
   - ingress.yaml
+  - hpa.yaml
 
 configMapGenerator:
   - name: postgres-init-sql

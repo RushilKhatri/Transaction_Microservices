@@ -189,65 +189,25 @@ EOF
       }
     }
 
-    stage('Deploy to Kubernetes') {
+    stage('Deploy to Kubernetes via Ansible') {
       when {
         expression { return params.DEPLOY_TO_K8S }
       }
       steps {
         sh '''
           set -e
-          
-          # Check kubectl is available
-          if ! command -v kubectl &> /dev/null; then
-            echo "ERROR: kubectl not found. Please install kubectl and configure kubeconfig."
+
+          if ! command -v ansible-playbook &> /dev/null; then
+            echo "ERROR: ansible-playbook not found. Please install Ansible."
             exit 1
           fi
-          
-          # Verify cluster connection
-          echo "Verifying Kubernetes cluster connection..."
-          kubectl cluster-info
-          
-          # Create namespace if it doesn't exist
-          kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
-          
-          # Create a kustomization overlay with the build-specific image tag
-          mkdir -p k8s/overlays/ci-build
-          
-          cat > k8s/overlays/ci-build/kustomization.yaml <<EOF
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
 
-namespace: ${K8S_NAMESPACE}
-
-bases:
-  - ../../
-
-images:
-  - name: banking-transaction-service
-    newTag: "${K8S_IMAGE_TAG}"
-  - name: banking-fraud-detection-service
-    newTag: "${K8S_IMAGE_TAG}"
-  - name: banking-notification-service
-    newTag: "${K8S_IMAGE_TAG}"
-  - name: banking-frontend
-    newTag: "${K8S_IMAGE_TAG}"
-EOF
-          
-          # Apply manifests
-          echo "Deploying manifests to Kubernetes namespace: ${K8S_NAMESPACE}"
-          kubectl apply -k k8s/overlays/ci-build
-          
-          # Wait for deployments to be ready (max 5 minutes)
-          echo "Waiting for deployments to become ready..."
-          kubectl rollout status deployment/transaction-service -n "${K8S_NAMESPACE}" --timeout=5m
-          kubectl rollout status deployment/fraud-detection-service -n "${K8S_NAMESPACE}" --timeout=5m
-          kubectl rollout status deployment/notification-service -n "${K8S_NAMESPACE}" --timeout=5m
-          kubectl rollout status deployment/frontend -n "${K8S_NAMESPACE}" --timeout=5m
-          
-          echo "Kubernetes deployment successful!"
-          echo ""
-          echo "Deployed resources:"
-          kubectl get all -n "${K8S_NAMESPACE}"
+          ansible-playbook \
+            -i ansible/inventory/hosts.ini \
+            ansible/deploy.yml \
+            --vault-password-file ansible/.vault_pass \
+            -e k8s_namespace="${K8S_NAMESPACE}" \
+            -e k8s_image_tag="${K8S_IMAGE_TAG}"
         '''
       }
     }
@@ -286,10 +246,13 @@ EOF
       steps {
         sh '''
           set -e
-          if [ -f ansible/playbook.yml ]; then
-            ansible-playbook ansible/playbook.yml
+          if [ -f ansible/deploy.yml ]; then
+            ansible-playbook \
+              -i ansible/inventory/hosts.ini \
+              ansible/deploy.yml \
+              --vault-password-file ansible/.vault_pass
           else
-            echo "No ansible/playbook.yml found; skipping deploy."
+            echo "No ansible/deploy.yml found; skipping deploy."
           fi
         '''
       }

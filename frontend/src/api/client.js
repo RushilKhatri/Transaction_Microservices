@@ -4,12 +4,9 @@
  * Each function that requires auth accepts the JWT token as its first argument.
  */
 
-const TRANSACTION_URL =
-    import.meta.env.VITE_TRANSACTION_URL || 'http://localhost:5001';
-const FRAUD_URL =
-    import.meta.env.VITE_FRAUD_URL || 'http://localhost:5002';
-const NOTIFICATION_URL =
-    import.meta.env.VITE_NOTIFICATION_URL || 'http://localhost:5003';
+const TRANSACTION_URL = import.meta.env.VITE_TRANSACTION_URL || '/api/transaction';
+const FRAUD_URL = import.meta.env.VITE_FRAUD_URL || '/api/fraud';
+const NOTIFICATION_URL = import.meta.env.VITE_NOTIFICATION_URL || '/api/notification';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

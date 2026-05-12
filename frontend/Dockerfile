@@ -7,13 +7,9 @@ COPY package.json package-lock.json* ./
 RUN npm ci --include=dev --silent
 
 COPY . .
-# Inject build-time env vars so Vite bakes service URLs into the bundle
-ARG VITE_TRANSACTION_URL=http://localhost:5001
-ARG VITE_FRAUD_URL=http://localhost:5002
-ARG VITE_NOTIFICATION_URL=http://localhost:5003
-ENV VITE_TRANSACTION_URL=$VITE_TRANSACTION_URL
-ENV VITE_FRAUD_URL=$VITE_FRAUD_URL
-ENV VITE_NOTIFICATION_URL=$VITE_NOTIFICATION_URL
+# Inject build-time env vars so Vite bakes the API prefix into the bundle
+ARG VITE_API_PREFIX=/api
+ENV VITE_API_PREFIX=$VITE_API_PREFIX
 
 RUN npm run build
 

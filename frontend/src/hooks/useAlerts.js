@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useContext } from 'react';
 import { getAlerts, dismissAlert as apiDismissAlert } from '../api/client';
 import { AuthContext } from '../AuthContext';
 
-const POLL_MS = 3000;
+const POLL_MS = 15000;
 
 export function useAlerts() {
     const { token } = useContext(AuthContext);
@@ -16,7 +16,11 @@ export function useAlerts() {
     const [error, setError] = useState(null);
 
     const fetchAlerts = useCallback(async () => {
-        if (!token) return;
+        if (!token) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
         try {
             const data = await getAlerts(token);
             setAlerts(Array.isArray(data) ? data : []);
@@ -29,10 +33,15 @@ export function useAlerts() {
     }, [token]);
 
     useEffect(() => {
+        if (!token) {
+            setLoading(false);
+            return undefined;
+        }
+
         fetchAlerts();
         const id = setInterval(fetchAlerts, POLL_MS);
         return () => clearInterval(id);
-    }, [fetchAlerts]);
+    }, [fetchAlerts, token]);
 
     const dismissAlert = useCallback(
         async (alertId) => {

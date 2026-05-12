@@ -146,9 +146,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_TRANSACTION_URL: http://localhost:5001
-        VITE_FRAUD_URL: http://localhost:5002
-        VITE_NOTIFICATION_URL: http://localhost:5003
+        VITE_API_PREFIX: /api
     container_name: banking-frontend
     restart: unless-stopped
     ports:

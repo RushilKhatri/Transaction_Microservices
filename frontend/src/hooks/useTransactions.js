@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useContext } from 'react';
 import { getAllTransactionHistory } from '../api/client';
 import { AuthContext } from '../AuthContext';
 
-const POLL_MS = 3000;
+const POLL_MS = 15000;
 
 export function useTransactions(accountIds = [], accounts = []) {
     const { token } = useContext(AuthContext);
@@ -22,7 +22,11 @@ export function useTransactions(accountIds = [], accounts = []) {
     }, {});
 
     const fetchTransactions = useCallback(async () => {
-        if (!token || accountIds.length === 0) return;
+        if (!token || accountIds.length === 0) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
         try {
             const txs = await getAllTransactionHistory(token, accountIds);
             // Attach resolved names
@@ -41,10 +45,15 @@ export function useTransactions(accountIds = [], accounts = []) {
     }, [token, accountIds, JSON.stringify(nameMap)]);
 
     useEffect(() => {
+        if (!token || accountIds.length === 0) {
+            setLoading(false);
+            return undefined;
+        }
+
         fetchTransactions();
         const id = setInterval(fetchTransactions, POLL_MS);
         return () => clearInterval(id);
-    }, [fetchTransactions]);
+    }, [fetchTransactions, token, accountIds.length]);
 
     return { transactions, loading, error, refetch: fetchTransactions };
 }
