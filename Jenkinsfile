@@ -11,13 +11,10 @@ pipeline {
   }
 
   parameters {
-    booleanParam(name: 'PUSH_IMAGES', defaultValue: false, description: 'Push built images to Docker Hub')
-    booleanParam(name: 'RUN_DEPLOY', defaultValue: false, description: 'Run deployment step after image push')
-    booleanParam(name: 'DEPLOY_TO_K8S', defaultValue: false, description: 'Deploy to Kubernetes cluster (requires kubectl + kubeconfig)')
     booleanParam(name: 'FAIL_ON_IMAGE_SCAN', defaultValue: false, description: 'Fail pipeline on Trivy HIGH/CRITICAL findings')
-    string(name: 'DOCKERHUB_NAMESPACE', defaultValue: 'your-dockerhub-username', description: 'Docker Hub namespace/user')
+    string(name: 'DOCKERHUB_NAMESPACE', defaultValue: 'rushilkhatri', description: 'Docker Hub namespace/user')
     string(name: 'K8S_NAMESPACE', defaultValue: 'banking', description: 'Kubernetes namespace for deployment')
-    string(name: 'K8S_IMAGE_TAG', defaultValue: 'latest', description: 'Image tag for Kubernetes deployment (e.g., build number or git commit)')
+    string(name: 'K8S_IMAGE_TAG', defaultValue: 'latest', description: 'Image tag for Kubernetes deployment (auto-set to BUILD_NUMBER)')
   }
 
   environment {
@@ -189,33 +186,7 @@ EOF
       }
     }
 
-    stage('Deploy to Kubernetes via Ansible') {
-      when {
-        expression { return params.DEPLOY_TO_K8S }
-      }
-      steps {
-        sh '''
-          set -e
-
-          if ! command -v ansible-playbook &> /dev/null; then
-            echo "ERROR: ansible-playbook not found. Please install Ansible."
-            exit 1
-          fi
-
-          ansible-playbook \
-            -i ansible/inventory/hosts.ini \
-            ansible/deploy.yml \
-            --vault-password-file ansible/.vault_pass \
-            -e k8s_namespace="${K8S_NAMESPACE}" \
-            -e k8s_image_tag="${K8S_IMAGE_TAG}"
-        '''
-      }
-    }
-
     stage('Push to Docker Hub') {
-      when {
-        expression { return params.PUSH_IMAGES }
-      }
       steps {
         withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
           sh '''
@@ -231,29 +202,32 @@ EOF
             docker push "$DOCKERHUB_NAMESPACE/fraud-detection-service:${BUILD_NUMBER}"
             docker push "$DOCKERHUB_NAMESPACE/notification-service:${BUILD_NUMBER}"
             docker push "$DOCKERHUB_NAMESPACE/frontend:${BUILD_NUMBER}"
+
+            echo "All images pushed successfully with tag ${BUILD_NUMBER}"
           '''
         }
       }
     }
 
-    stage('Deploy (Optional)') {
-      when {
-        allOf {
-          expression { return params.RUN_DEPLOY }
-          expression { return params.PUSH_IMAGES }
-        }
-      }
+    stage('Deploy to Kubernetes via Ansible') {
       steps {
         sh '''
           set -e
-          if [ -f ansible/deploy.yml ]; then
-            ansible-playbook \
-              -i ansible/inventory/hosts.ini \
-              ansible/deploy.yml \
-              --vault-password-file ansible/.vault_pass
-          else
-            echo "No ansible/deploy.yml found; skipping deploy."
+
+          if ! command -v ansible-playbook &> /dev/null; then
+            echo "ERROR: ansible-playbook not found. Please install Ansible."
+            exit 1
           fi
+
+          echo "Deploying to Kubernetes with zero-downtime rolling update..."
+          ansible-playbook \
+            -i ansible/inventory/hosts.ini \
+            ansible/deploy.yml \
+            --vault-password-file ansible/.vault_pass \
+            -e k8s_namespace="${K8S_NAMESPACE}" \
+            -e k8s_image_tag="${K8S_IMAGE_TAG}"
+          
+          echo "Deployment completed successfully!"
         '''
       }
     }
