@@ -191,7 +191,11 @@ EOF
         withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
           sh '''
             set -e
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+            if ! echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin; then
+              echo "ERROR: Docker Hub login failed. Please verify Jenkins credential 'dockerhub-creds' (username and token/password)."
+              echo "Hint: use a Docker Hub Personal Access Token as the password."
+              exit 1
+            fi
 
             docker tag banking-devsecops-transaction-service:latest "$DOCKERHUB_NAMESPACE/transaction-service:${BUILD_NUMBER}"
             docker tag banking-devsecops-fraud-detection-service:latest "$DOCKERHUB_NAMESPACE/fraud-detection-service:${BUILD_NUMBER}"
@@ -214,13 +218,17 @@ EOF
         sh '''
           set -e
 
-          if ! command -v ansible-playbook &> /dev/null; then
-            echo "ERROR: ansible-playbook not found. Please install Ansible."
+          # Ensure ansible-playbook is available
+          ANSIBLE_CMD=$(which ansible-playbook || echo "/usr/bin/ansible-playbook")
+          if [ ! -x "$ANSIBLE_CMD" ]; then
+            echo "ERROR: ansible-playbook not found at $ANSIBLE_CMD"
             exit 1
           fi
 
           echo "Deploying to Kubernetes with zero-downtime rolling update..."
-          ansible-playbook \
+          echo "Using ansible-playbook: $ANSIBLE_CMD"
+          
+          "$ANSIBLE_CMD" \
             -i ansible/inventory/hosts.ini \
             ansible/deploy.yml \
             --vault-password-file ansible/.vault_pass \
