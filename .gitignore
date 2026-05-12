@@ -52,6 +52,5 @@ Thumbs.db
 *.swo
 
 # Ansible-generated deployment files
-ansible/.vault_pass
 k8s/secret.yaml
 k8s/overlays/ci-build/
