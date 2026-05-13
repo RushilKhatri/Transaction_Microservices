@@ -286,3 +286,10 @@ class TestHealth:
     def test_health_no_auth_required(self, client):
         resp = client.get("/health")
         assert resp.status_code == 200
+
+    def test_metrics_endpoint_exposes_prometheus_metrics(self, client):
+        client.get("/health")
+        resp = client.get("/metrics")
+        assert resp.status_code == 200
+        assert b"banking_http_requests_total" in resp.data
+        assert b'banking_service="transaction-service"' in resp.data

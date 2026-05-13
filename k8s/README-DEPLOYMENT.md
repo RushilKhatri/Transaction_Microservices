@@ -8,6 +8,7 @@ This guide covers deploying the banking system to Kubernetes via Jenkins or manu
 - `kubectl` configured with access to your cluster
 - Docker images built and available (either locally or in a registry)
 - NGINX Ingress Controller installed (for ingress routing)
+- Helm 3+ for optional Prometheus/Grafana monitoring
 
 ## Manual Deployment (Local Testing)
 
@@ -48,6 +49,61 @@ kubectl port-forward -n banking svc/frontend 3000:80
 
 # Then visit http://localhost:3000
 ```
+
+## Prometheus + Grafana Monitoring
+
+The base `k8s/` deployment does not require Prometheus CRDs. Install monitoring as an add-on after the application is deployed.
+
+### 1. Install kube-prometheus-stack
+
+Current kube-prometheus-stack releases may require Kubernetes 1.25+. If your cluster is 1.24, install an older compatible chart version.
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --values k8s/monitoring/prometheus-values.yaml
+```
+
+This installs Prometheus, Grafana, Alertmanager, kube-state-metrics, and node-exporter.
+
+### 2. Apply banking monitoring resources
+
+```bash
+kubectl apply -k k8s/monitoring
+```
+
+This creates:
+
+- `ServiceMonitor` for `transaction-service`, `fraud-detection-service`, and `notification-service`
+- `PrometheusRule` alerts for pod readiness, restarts, CPU/memory pressure, scrape failures, HTTP 5xxs, and p95 latency
+- A Grafana dashboard ConfigMap named `banking-grafana-dashboard`
+
+### 3. Verify Prometheus discovery
+
+```bash
+kubectl get servicemonitor,prometheusrule -n banking
+kubectl port-forward -n monitoring svc/prometheus-operated 9090:9090
+```
+
+Open `http://localhost:9090/targets` and confirm the three banking backend targets are `UP`.
+
+### 4. Open Grafana
+
+```bash
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+
+kubectl get secret -n monitoring prometheus-grafana \
+  -o jsonpath="{.data.admin-user}" | base64 -d
+
+kubectl get secret -n monitoring prometheus-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 -d
+```
+
+Open `http://localhost:3000`, log in with the decoded credentials, then open the `Banking Kubernetes Overview` dashboard. The built-in Kubernetes dashboards from kube-prometheus-stack will also show pod CPU, memory, restarts, deployments, nodes, and cluster health.
 
 ## Jenkins-Triggered Deployment
 

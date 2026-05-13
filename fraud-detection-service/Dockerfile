@@ -5,6 +5,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+ENV PORT=5002
+ENV PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus-metrics
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -12,4 +15,4 @@ COPY . .
 
 EXPOSE 5002
 
-CMD ["gunicorn", "--workers=2", "--bind=0.0.0.0:5002", "--timeout=60", "run:app"]
+CMD ["gunicorn", "--config=gunicorn.conf.py", "run:app"]

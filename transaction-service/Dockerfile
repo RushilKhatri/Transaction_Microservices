@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+ENV PORT=5001
+ENV PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus-metrics
+
 # Install Python dependencies first (layer-cache friendly)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -20,6 +23,6 @@ COPY . .
 # Expose Flask port
 EXPOSE 5001
 
-# Gunicorn: 2 workers, bind to 0.0.0.0:5001
+# Gunicorn: 2 workers by default, configured in gunicorn.conf.py
 # run:app → file run.py exposes the Flask `app` object
-CMD ["gunicorn", "--workers=2", "--bind=0.0.0.0:5001", "--timeout=60", "run:app"]
+CMD ["gunicorn", "--config=gunicorn.conf.py", "run:app"]

@@ -26,6 +26,9 @@ def create_app(config_object=None):
     db.init_app(app)
     jwt.init_app(app)
 
+    from app.metrics import register_metrics  # noqa: PLC0415
+    register_metrics(app, "notification-service")
+
     from app.utils import setup_logger  # noqa: PLC0415
     logger = setup_logger("notification-service")
 

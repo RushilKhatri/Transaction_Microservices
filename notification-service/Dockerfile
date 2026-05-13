@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+ENV PORT=5003
+ENV PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus-metrics
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -15,4 +18,4 @@ COPY . .
 
 EXPOSE 5003
 
-CMD ["gunicorn", "--workers=2", "--bind=0.0.0.0:5003", "--timeout=60", "run:app"]
+CMD ["gunicorn", "--config=gunicorn.conf.py", "run:app"]

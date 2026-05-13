@@ -22,6 +22,9 @@ def create_app(config_object=None):
 
     jwt.init_app(app)
 
+    from app.metrics import register_metrics  # noqa: PLC0415
+    register_metrics(app, "fraud-detection-service")
+
     from app.utils import setup_logger  # noqa: PLC0415
     logger = setup_logger("fraud-detection-service")
 

@@ -1,0 +1,101 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: banking-alerts
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: banking.kubernetes
+      interval: 30s
+      rules:
+        - alert: BankingPodCrashLooping
+          expr: kube_pod_container_status_waiting_reason{namespace="banking",reason="CrashLoopBackOff"} > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Banking pod is crash looping
+            description: Pod {{ $labels.pod }} container {{ $labels.container }} is in CrashLoopBackOff.
+
+        - alert: BankingPodRestarting
+          expr: sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace="banking"}[15m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Banking pod restarted
+            description: Pod {{ $labels.pod }} restarted during the last 15 minutes.
+
+        - alert: BankingPodNotReady
+          expr: kube_pod_status_ready{namespace="banking",condition="true"} == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Banking pod is not ready
+            description: Pod {{ $labels.pod }} has not been ready for 10 minutes.
+
+        - alert: BankingPodHighCPU
+          expr: |
+            (
+              sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="banking",container!="",container!="POD"}[5m]))
+              /
+              sum by (pod) (kube_pod_container_resource_requests{namespace="banking",resource="cpu"})
+            ) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Banking pod CPU usage is high
+            description: Pod {{ $labels.pod }} is using more than 80% of its requested CPU.
+
+        - alert: BankingPodHighMemory
+          expr: |
+            (
+              sum by (pod) (container_memory_working_set_bytes{namespace="banking",container!="",container!="POD"})
+              /
+              sum by (pod) (kube_pod_container_resource_limits{namespace="banking",resource="memory"})
+            ) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Banking pod memory usage is high
+            description: Pod {{ $labels.pod }} is using more than 85% of its memory limit.
+
+    - name: banking.application
+      interval: 30s
+      rules:
+        - alert: BankingMetricsTargetDown
+          expr: up{namespace="banking",service=~"transaction-service|fraud-detection-service|notification-service"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Banking metrics target is down
+            description: Prometheus cannot scrape {{ $labels.service }}.
+
+        - alert: BankingHighHTTPErrorRate
+          expr: sum by (banking_service) (rate(banking_http_requests_total{namespace="banking",status=~"5.."}[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Banking service is returning HTTP 5xx responses
+            description: Service {{ $labels.banking_service }} has returned HTTP 5xx responses for 5 minutes.
+
+        - alert: BankingHighHTTPLatency
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum by (le, banking_service) (
+                rate(banking_http_request_duration_seconds_bucket{namespace="banking"}[5m])
+              )
+            ) > 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Banking service p95 latency is high
+            description: Service {{ $labels.banking_service }} p95 HTTP latency is above 1 second.

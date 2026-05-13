@@ -235,3 +235,10 @@ class TestHealth:
         data = resp.get_json()
         assert data["status"] == "ok"
         assert data["service"] == "fraud-detection-service"
+
+    def test_metrics_endpoint_exposes_prometheus_metrics(self, client):
+        client.get("/health")
+        resp = client.get("/metrics")
+        assert resp.status_code == 200
+        assert b"banking_http_requests_total" in resp.data
+        assert b'banking_service="fraud-detection-service"' in resp.data
