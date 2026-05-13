@@ -51,16 +51,16 @@
   changed_when: false
   ignore_errors: true
 
+- name: Ensure CI build overlay directory exists
+  ansible.builtin.file:
+    path: "{{ k8s_dir }}/overlays/ci-build"
+    state: directory
+
 - name: Render Kubernetes secret from vault variables
   ansible.builtin.template:
     src: secret.yaml.j2
     dest: "{{ k8s_dir }}/overlays/ci-build/secret.yaml"
     mode: '0600'
-
-- name: Ensure CI build overlay directory exists
-  ansible.builtin.file:
-    path: "{{ k8s_dir }}/overlays/ci-build"
-    state: directory
 
 - name: Copy static Kubernetes manifests into the overlay
   ansible.builtin.copy:
