@@ -28,7 +28,17 @@ grafana:
   adminUser: admin
   adminPassword: ""
   defaultDashboardsTimezone: browser
+  service:
+    type: NodePort
+    nodePort: 31300
   sidecar:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
     dashboards:
       enabled: true
       label: grafana_dashboard
@@ -41,11 +51,11 @@ grafana:
     enabled: false
   resources:
     requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: 250m
+      cpu: 100m
       memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
 
 alertmanager:
   enabled: true
