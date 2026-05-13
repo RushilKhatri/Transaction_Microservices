@@ -144,7 +144,28 @@ pipeline {
               echo "ERROR: could not find container for $label"
               exit 1
             fi
-            timeout 120 sh -c "until [ \"\$(docker inspect --format='{{.State.Health.Status}}' '$container_id' 2>/dev/null)\" = 'healthy' ]; do sleep 2; done"
+
+            i=0
+            while [ "$i" -lt 60 ]; do
+              health_status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$container_id" 2>/dev/null || true)"
+
+              if [ "$health_status" = "healthy" ]; then
+                return 0
+              fi
+
+              if [ "$health_status" = "unhealthy" ]; then
+                echo "ERROR: $label container became unhealthy"
+                docker logs "$container_id" --tail 50 || true
+                exit 1
+              fi
+
+              i=$((i + 1))
+              sleep 2
+            done
+
+            echo "ERROR: timed out waiting for $label to become healthy"
+            docker logs "$container_id" --tail 50 || true
+            exit 1
           }
 
           wait_for_health "$transaction_container_id" transaction-service
