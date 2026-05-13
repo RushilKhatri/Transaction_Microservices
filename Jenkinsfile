@@ -129,9 +129,10 @@ pipeline {
         sh '''
           set -e
 
-          COMPOSE_CMD="docker compose --env-file .env.docker"
+          SMOKE_PROJECT="banking-devsecops-smoke-${BUILD_NUMBER:-local}"
+          COMPOSE_CMD="docker compose -p $SMOKE_PROJECT --env-file .env.docker"
 
-          $COMPOSE_CMD down -v || true
+          $COMPOSE_CMD down -v --remove-orphans || true
 
           $COMPOSE_CMD up -d vault postgres
           bash infra/vault/seed-dev.sh
@@ -173,8 +174,7 @@ pipeline {
           wait_for_health "$fraud_container_id" fraud-detection-service
           notification_container_id="$($COMPOSE_CMD run -d --no-deps notification-service)"
           wait_for_health "$notification_container_id" notification-service
-          frontend_container_id="$($COMPOSE_CMD run -d --no-deps frontend)"
-          wait_for_health "$frontend_container_id" frontend
+          $COMPOSE_CMD run -d --no-deps frontend
 
           docker exec -i "$transaction_container_id" python - <<'PY'
 import json
@@ -311,7 +311,12 @@ print(transaction["id"])
     always {
       junit testResults: 'reports/*.xml', allowEmptyResults: true
       archiveArtifacts artifacts: 'reports/*', allowEmptyArchive: true
-      sh 'docker compose --env-file .env.docker down -v || true'
+      sh '''
+        set -e
+        SMOKE_PROJECT="banking-devsecops-smoke-${BUILD_NUMBER:-local}"
+        docker compose -p "$SMOKE_PROJECT" --env-file .env.docker down -v --remove-orphans || true
+        docker compose --env-file .env.docker down -v || true
+      '''
     }
   }
 }
