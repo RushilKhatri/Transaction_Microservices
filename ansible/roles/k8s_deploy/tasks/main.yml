@@ -1,10 +1,19 @@
 ---
+- name: Get home directory
+  ansible.builtin.set_fact:
+    home_dir: "{{ lookup('env', 'HOME') }}"
+  changed_when: false
+
 - name: Verify kubeconfig is available
   ansible.builtin.stat:
-    path: "{{ ansible_env.HOME }}/.kube/config"
+    path: "{{ home_dir }}/.kube/config"
   register: kubeconfig_stat
-  failed_when: not kubeconfig_stat.stat.exists
   changed_when: false
+
+- name: Fail if kubeconfig is missing
+  ansible.builtin.fail:
+    msg: "kubeconfig not found at {{ home_dir }}/.kube/config. Please configure kubectl access to the Kubernetes cluster."
+  when: not kubeconfig_stat.stat.exists
 
 - name: Ensure Kubernetes namespace exists
   ansible.builtin.command:
@@ -33,12 +42,14 @@
   when: metrics_server_check.rc != 0
   register: metrics_server_apply
   changed_when: true
+  ignore_errors: true
 
 - name: Wait for Metrics Server rollout
   ansible.builtin.command:
     cmd: kubectl rollout status deployment/metrics-server -n kube-system --timeout=180s
-  when: metrics_server_check.rc != 0
+  when: metrics_server_check.rc != 0 and metrics_server_apply is not failed
   changed_when: false
+  ignore_errors: true
 
 - name: Render Kubernetes secret from vault variables
   ansible.builtin.template:
