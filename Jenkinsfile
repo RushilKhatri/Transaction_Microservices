@@ -128,60 +128,104 @@ pipeline {
       steps {
         sh '''
           set -e
-          docker compose --env-file .env.docker down -v || true
 
-          docker compose --env-file .env.docker up -d vault postgres
+          COMPOSE_CMD="docker compose --env-file .env.docker"
+
+          $COMPOSE_CMD down -v || true
+
+          $COMPOSE_CMD up -d vault postgres
           bash infra/vault/seed-dev.sh
-          docker compose --env-file .env.docker up -d transaction-service
+          $COMPOSE_CMD run -d --no-deps transaction-service
 
-          # wait for health
-          timeout 120 sh -c 'until [ "$(docker inspect --format="{{.State.Health.Status}}" banking-transaction 2>/dev/null)" = "healthy" ]; do sleep 2; done'
-
-          docker compose --env-file .env.docker up -d notification-service fraud-detection-service frontend
-
-          timeout 120 sh -c 'until [ "$(docker inspect --format="{{.State.Health.Status}}" banking-fraud 2>/dev/null)" = "healthy" ]; do sleep 2; done'
-          timeout 120 sh -c 'until [ "$(docker inspect --format="{{.State.Health.Status}}" banking-notification 2>/dev/null)" = "healthy" ]; do sleep 2; done'
-
-          curl -fsS http://localhost:5001/health > /dev/null
-          curl -fsS http://localhost:5002/health > /dev/null
-          curl -fsS http://localhost:5003/health > /dev/null
-          curl -fsS http://localhost:3000 > /dev/null
-
-          TOKEN=$(curl -fsS -X POST http://localhost:5001/auth/token \
-            -H 'Content-Type: application/json' \
-            -d '{"username":"admin","password":"admin123"}' \
-            | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
-
-          A1=$(curl -fsS -X POST http://localhost:5001/account/create \
-            -H "Authorization: Bearer $TOKEN" \
-            -H 'Content-Type: application/json' \
-            -d '{"owner_name":"Jenkins A","balance":120000}' \
-            | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
-
-          A2=$(curl -fsS -X POST http://localhost:5001/account/create \
-            -H "Authorization: Bearer $TOKEN" \
-            -H 'Content-Type: application/json' \
-            -d '{"owner_name":"Jenkins B","balance":1000}' \
-            | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
-
-          SUCCESS=0
-          for i in $(seq 1 10); do
-            cat > payload.json <<EOF
-{"from_account_id":"$A1","to_account_id":"$A2","amount":60000,"transaction_type":"debit"}
-EOF
-            curl -sS -X POST http://localhost:5001/transaction -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @payload.json > tx.json 2>&1
-            HTTP_CODE=$?
-            
-            if [ "$HTTP_CODE" -eq 0 ]; then
-              python3 -c "import json; d=json.load(open('tx.json')); assert d.get('fraud_flagged') is True; print(d['id'])" && SUCCESS=1 && break
+          wait_for_health() {
+            service_name="$1"
+            container_id="$($COMPOSE_CMD ps -q "$service_name")"
+            if [ -z "$container_id" ]; then
+              echo "ERROR: could not find container for $service_name"
+              exit 1
             fi
-            
-            echo "Transaction attempt $i failed"
-            cat tx.json || true
-            sleep 2
-          done
+            timeout 120 sh -c "until [ \"\$(docker inspect --format='{{.State.Health.Status}}' '$container_id' 2>/dev/null)\" = 'healthy' ]; do sleep 2; done"
+          }
 
-          [ "$SUCCESS" = "1" ]
+          wait_for_health transaction-service
+          $COMPOSE_CMD run -d --no-deps fraud-detection-service
+          wait_for_health fraud-detection-service
+          $COMPOSE_CMD run -d --no-deps notification-service
+          wait_for_health notification-service
+          $COMPOSE_CMD run -d --no-deps frontend
+
+          $COMPOSE_CMD exec -T transaction-service python - <<'PY'
+import json
+import time
+import urllib.request
+
+
+def request(method, url, payload=None, headers=None):
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method=method, headers=headers or {})
+    with urllib.request.urlopen(req, timeout=20) as response:
+        return response.read().decode("utf-8")
+
+
+def wait_for(url, label):
+    for _ in range(60):
+        try:
+            request("GET", url)
+            return
+        except Exception:
+            time.sleep(2)
+    raise RuntimeError(f"{label} did not become ready")
+
+
+wait_for("http://localhost:5001/health", "transaction service")
+wait_for("http://fraud-detection-service:5002/health", "fraud service")
+wait_for("http://notification-service:5003/health", "notification service")
+wait_for("http://frontend/", "frontend")
+
+token_response = json.loads(
+    request(
+        "POST",
+        "http://localhost:5001/auth/token",
+        payload={"username": "admin", "password": "admin123"},
+        headers={"Content-Type": "application/json"},
+    )
+)
+token = token_response["access_token"]
+
+account_one = json.loads(
+    request(
+        "POST",
+        "http://localhost:5001/account/create",
+        payload={"owner_name": "Jenkins A", "balance": 120000},
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+)["id"]
+
+account_two = json.loads(
+    request(
+        "POST",
+        "http://localhost:5001/account/create",
+        payload={"owner_name": "Jenkins B", "balance": 1000},
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+)["id"]
+
+transaction = json.loads(
+    request(
+        "POST",
+        "http://localhost:5001/transaction",
+        payload={
+            "from_account_id": account_one,
+            "to_account_id": account_two,
+            "amount": 60000,
+            "transaction_type": "debit",
+        },
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+)
+
+assert transaction.get("fraud_flagged") is True, transaction
+print(transaction["id"])
         '''
       }
     }
