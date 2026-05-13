@@ -39,7 +39,7 @@ spec:
             - until wget -qO- http://vault:8200/v1/sys/health >/dev/null 2>&1; do echo waiting for vault; sleep 2; done
       containers:
         - name: transaction-service
-          image: banking-transaction-service:latest
+          image: rushilkhatri/banking-transaction-service:v1.0.4
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5001
