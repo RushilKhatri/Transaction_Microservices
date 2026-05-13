@@ -132,15 +132,39 @@ pipeline {
           SMOKE_PROJECT="banking-devsecops-smoke-${BUILD_NUMBER:-local}"
           COMPOSE_CMD="docker compose -p $SMOKE_PROJECT --env-file .env.docker"
 
+          pick_free_port() {
+            python3 - <<'PY'
+import socket
+sock = socket.socket()
+sock.bind(('127.0.0.1', 0))
+print(sock.getsockname()[1])
+sock.close()
+PY
+          }
+
+          export POSTGRES_HOST_PORT="$(pick_free_port)"
+          export VAULT_HOST_PORT="$(pick_free_port)"
+          export TRANSACTION_HOST_PORT="$(pick_free_port)"
+          export FRAUD_HOST_PORT="$(pick_free_port)"
+          export NOTIFICATION_HOST_PORT="$(pick_free_port)"
+          export FRONTEND_HOST_PORT="$(pick_free_port)"
+
+          cleanup() {
+            $COMPOSE_CMD down -v --remove-orphans || true
+          }
+          trap cleanup EXIT
+
           $COMPOSE_CMD down -v --remove-orphans || true
 
           $COMPOSE_CMD up -d vault postgres
           bash infra/vault/seed-dev.sh
-          transaction_container_id="$($COMPOSE_CMD run -d --no-deps transaction-service)"
+          $COMPOSE_CMD up -d transaction-service fraud-detection-service notification-service frontend
 
           wait_for_health() {
-            container_id="$1"
-            label="$2"
+            service_name="$1"
+            container_id="$($COMPOSE_CMD ps -q "$service_name")"
+            label="$service_name"
+
             if [ -z "$container_id" ]; then
               echo "ERROR: could not find container for $label"
               exit 1
@@ -169,15 +193,10 @@ pipeline {
             exit 1
           }
 
-          wait_for_health "$transaction_container_id" transaction-service
-          fraud_container_id="$($COMPOSE_CMD run -d --no-deps fraud-detection-service)"
-          wait_for_health "$fraud_container_id" fraud-detection-service
-          notification_container_id="$($COMPOSE_CMD run -d --no-deps notification-service)"
-          wait_for_health "$notification_container_id" notification-service
-          $COMPOSE_CMD run -d --no-deps frontend
-
-          docker exec -i "$transaction_container_id" python - <<'PY'
-import json
+          wait_for_health transaction-service
+          wait_for_health fraud-detection-service
+          wait_for_health notification-service
+          $COMPOSE_CMD exec -T transaction-service python - <<'PY'
 import time
 import urllib.request
 
