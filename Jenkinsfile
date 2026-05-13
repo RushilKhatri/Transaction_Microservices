@@ -135,26 +135,27 @@ pipeline {
 
           $COMPOSE_CMD up -d vault postgres
           bash infra/vault/seed-dev.sh
-          $COMPOSE_CMD run -d --no-deps transaction-service
+          transaction_container_id="$($COMPOSE_CMD run -d --no-deps transaction-service)"
 
           wait_for_health() {
-            service_name="$1"
-            container_id="$($COMPOSE_CMD ps -q "$service_name")"
+            container_id="$1"
+            label="$2"
             if [ -z "$container_id" ]; then
-              echo "ERROR: could not find container for $service_name"
+              echo "ERROR: could not find container for $label"
               exit 1
             fi
             timeout 120 sh -c "until [ \"\$(docker inspect --format='{{.State.Health.Status}}' '$container_id' 2>/dev/null)\" = 'healthy' ]; do sleep 2; done"
           }
 
-          wait_for_health transaction-service
-          $COMPOSE_CMD run -d --no-deps fraud-detection-service
-          wait_for_health fraud-detection-service
-          $COMPOSE_CMD run -d --no-deps notification-service
-          wait_for_health notification-service
-          $COMPOSE_CMD run -d --no-deps frontend
+          wait_for_health "$transaction_container_id" transaction-service
+          fraud_container_id="$($COMPOSE_CMD run -d --no-deps fraud-detection-service)"
+          wait_for_health "$fraud_container_id" fraud-detection-service
+          notification_container_id="$($COMPOSE_CMD run -d --no-deps notification-service)"
+          wait_for_health "$notification_container_id" notification-service
+          frontend_container_id="$($COMPOSE_CMD run -d --no-deps frontend)"
+          wait_for_health "$frontend_container_id" frontend
 
-          $COMPOSE_CMD exec -T transaction-service python - <<'PY'
+          docker exec -i "$transaction_container_id" python - <<'PY'
 import json
 import time
 import urllib.request
