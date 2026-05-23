@@ -130,7 +130,8 @@ pipeline {
           set -e
 
           SMOKE_PROJECT="banking-devsecops-smoke-${BUILD_NUMBER:-local}"
-          COMPOSE_CMD="docker compose -p $SMOKE_PROJECT --env-file .env.docker"
+          # compose command will reference both the main compose file and a temporary override
+          COMPOSE_CMD_BASE="docker compose -p $SMOKE_PROJECT --env-file .env.docker -f docker-compose.yml -f .smoke-override.yml"
 
           pick_free_port() {
             python3 - <<'PY'
@@ -149,20 +150,50 @@ PY
           export NOTIFICATION_HOST_PORT="$(pick_free_port)"
           export FRONTEND_HOST_PORT="$(pick_free_port)"
 
+          # create a temporary override compose file that maps container ports to randomized host ports
+          cat > .smoke-override.yml <<EOF
+services:
+  postgres:
+    container_name: "banking-postgres-${SMOKE_PROJECT}"
+    ports:
+      - "${POSTGRES_HOST_PORT}:5432"
+  vault:
+    container_name: "banking-vault-${SMOKE_PROJECT}"
+    ports:
+      - "${VAULT_HOST_PORT}:8200"
+  transaction-service:
+    container_name: "banking-transaction-${SMOKE_PROJECT}"
+    ports:
+      - "${TRANSACTION_HOST_PORT}:5001"
+  fraud-detection-service:
+    container_name: "banking-fraud-${SMOKE_PROJECT}"
+    ports:
+      - "${FRAUD_HOST_PORT}:5002"
+  notification-service:
+    container_name: "banking-notification-${SMOKE_PROJECT}"
+    ports:
+      - "${NOTIFICATION_HOST_PORT}:5003"
+  frontend:
+    container_name: "banking-frontend-${SMOKE_PROJECT}"
+    ports:
+      - "${FRONTEND_HOST_PORT}:80"
+EOF
+
           cleanup() {
-            $COMPOSE_CMD down -v --remove-orphans || true
+            $COMPOSE_CMD_BASE down -v --remove-orphans || true
+            rm -f .smoke-override.yml || true
           }
           trap cleanup EXIT
 
-          $COMPOSE_CMD down -v --remove-orphans || true
+          $COMPOSE_CMD_BASE down -v --remove-orphans || true
 
-          $COMPOSE_CMD up -d vault postgres
+          $COMPOSE_CMD_BASE up -d vault postgres
           bash infra/vault/seed-dev.sh
-          $COMPOSE_CMD up -d transaction-service fraud-detection-service notification-service frontend
+          $COMPOSE_CMD_BASE up -d transaction-service fraud-detection-service notification-service frontend
 
           wait_for_health() {
             service_name="$1"
-            container_id="$($COMPOSE_CMD ps -q "$service_name")"
+            container_id="$(docker compose -p $SMOKE_PROJECT -f docker-compose.yml -f .smoke-override.yml ps -q "$service_name")"
             label="$service_name"
 
             if [ -z "$container_id" ]; then
@@ -196,7 +227,7 @@ PY
           wait_for_health transaction-service
           wait_for_health fraud-detection-service
           wait_for_health notification-service
-          $COMPOSE_CMD exec -T transaction-service python - <<'PY'
+          $COMPOSE_CMD_BASE exec -T transaction-service python - <<'PY'
 import time
 import urllib.request
 
