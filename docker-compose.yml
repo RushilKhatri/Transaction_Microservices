@@ -156,9 +156,6 @@ services:
     restart: unless-stopped
     ports:
       - "${FRONTEND_HOST_PORT:-3000}:80"
-    depends_on:
-      transaction-service:
-        condition: service_healthy
     networks:
       - banking-net
 
