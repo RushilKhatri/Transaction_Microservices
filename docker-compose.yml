@@ -20,6 +20,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
     networks:
       - banking-net
 
@@ -40,6 +41,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 10s
     networks:
       - banking-net
 
@@ -76,6 +78,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 45s
 
   # ── Fraud Detection Service ─────────────────────────────────────────────────
   fraud-detection-service:
@@ -106,6 +109,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   # ── Notification Service ────────────────────────────────────────────────────
   notification-service:
@@ -139,6 +143,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   # ── React Frontend ──────────────────────────────────────────────────────────
   frontend:

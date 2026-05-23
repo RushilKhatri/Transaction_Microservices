@@ -339,13 +339,19 @@ print(transaction["id"])
 
           echo "Deploying to Kubernetes with zero-downtime rolling update..."
           echo "Using ansible-playbook: $ANSIBLE_CMD"
+
+          DEPLOY_IMAGE_TAG="${K8S_IMAGE_TAG:-${BUILD_NUMBER}}"
+          if [ "$DEPLOY_IMAGE_TAG" = "latest" ]; then
+            DEPLOY_IMAGE_TAG="${BUILD_NUMBER}"
+          fi
+          echo "Using Kubernetes image tag: $DEPLOY_IMAGE_TAG"
           
           "$ANSIBLE_CMD" \
             -i ansible/inventory/hosts.ini \
             ansible/deploy.yml \
             --vault-password-file ansible/.vault_pass \
             -e k8s_namespace="${K8S_NAMESPACE}" \
-            -e k8s_image_tag="${K8S_IMAGE_TAG}"
+            -e k8s_image_tag="$DEPLOY_IMAGE_TAG"
           
           echo "Deployment completed successfully!"
         '''
