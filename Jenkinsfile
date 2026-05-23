@@ -188,7 +188,7 @@ EOF
           $COMPOSE_CMD_BASE down -v --remove-orphans || true
 
           $COMPOSE_CMD_BASE up -d vault postgres
-          bash infra/vault/seed-dev.sh
+          bash infra/vault/seed-dev.sh "banking-vault-${SMOKE_PROJECT}"
           $COMPOSE_CMD_BASE up -d transaction-service fraud-detection-service notification-service frontend
 
           wait_for_health() {

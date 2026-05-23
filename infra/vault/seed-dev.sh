@@ -14,7 +14,8 @@ set -a
 source "$ENV_FILE"
 set +a
 
-CONTAINER_NAME="banking-vault"
+# Accept container name as first argument, default to banking-vault for local/non-smoke tests
+CONTAINER_NAME="${1:-banking-vault}"
 
 echo "Waiting for Vault dev server..."
 until docker exec "$CONTAINER_NAME" sh -lc 'export VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root; vault status >/dev/null 2>&1'; do
