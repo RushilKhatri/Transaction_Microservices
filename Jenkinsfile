@@ -163,14 +163,22 @@ services:
       - "${VAULT_HOST_PORT}:8200"
   transaction-service:
     container_name: "banking-transaction-${SMOKE_PROJECT}"
+    environment:
+      DB_HOST: postgres
+      FRAUD_SERVICE_URL: http://fraud-detection-service:5002
     ports:
       - "${TRANSACTION_HOST_PORT}:5001"
   fraud-detection-service:
     container_name: "banking-fraud-${SMOKE_PROJECT}"
+    environment:
+      TRANSACTION_SERVICE_URL: http://transaction-service:5001
+      NOTIFICATION_SERVICE_URL: http://notification-service:5003
     ports:
       - "${FRAUD_HOST_PORT}:5002"
   notification-service:
     container_name: "banking-notification-${SMOKE_PROJECT}"
+    environment:
+      DB_HOST: postgres
     ports:
       - "${NOTIFICATION_HOST_PORT}:5003"
   frontend:
