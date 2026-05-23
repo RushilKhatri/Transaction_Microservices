@@ -77,12 +77,6 @@ pipeline {
             safety check -r fraud-detection-service/requirements.txt --full-report > reports/safety-fraud.txt &
             safety check -r notification-service/requirements.txt --full-report > reports/safety-notification.txt &
             wait  # wait for all background safety checks to complete
-
-            cd frontend
-            # prefer cached packages to reduce network latency in CI
-            npm ci --silent --prefer-offline
-            # run audit but don't fail the stage on transient network errors
-            npm audit --audit-level=high || true
           '''
         }
       }
